@@ -1,42 +1,60 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
 const app = express();
-
 const PORT = Number(process.env.PORT || 3001);
-const OLLAMA_URL =
-  process.env.OLLAMA_URL || "http://127.0.0.1:11434";
-const MODEL = process.env.OLLAMA_MODEL || "qwen2.5:3b";
+
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const API_KEY = process.env.GEMINI_API_KEY;
+
+const DEVELOPERS = ["Frank Bhatiwal", "Ayush Verma"];
+
+const IDENTITY_ANSWER =
+  "⚡ My developers are Frank Bhatiwal and Ayush Verma! " +
+  "They built LENDA AI together. Full desi tech scene! 🚀";
+
+if (!API_KEY) {
+  console.error("❌ GEMINI_API_KEY is missing from the environment.");
+  process.exit(1);
+}
+
+const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+// ======================================================
+// CORS — LOCAL DEVELOPMENT + DEPLOYED FRONTEND
+// ======================================================
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  ...(process.env.FRONTEND_URL || "")
+    .split(",")
+    .map((url) => url.trim().replace(/\/$/, ""))
+    .filter(Boolean),
+];
 
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://127.0.0.1:5173",
-    ],
+    origin(origin, callback) {
+      // Requests without an Origin header can include local
+      // health checks and server-to-server requests.
+      if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ""))) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Origin not allowed by LENDA AI CORS."));
+    },
   })
 );
 
 app.use(express.json({ limit: "10mb" }));
 
 // ======================================================
-// LENDA AI — OFFICIAL IDENTITY
-// ======================================================
-
-const DEVELOPERS = [
-  "Frank Bhatiwal",
-  "Ayush Verma",
-];
-
-const IDENTITY_ANSWER =
-  "⚡ My developers are Frank Bhatiwal and Ayush Verma! " +
-  "They built LENDA AI together. Full desi tech scene! 🚀";
-
-// ======================================================
-// SIX PERSONALITIES
+// PERSONALITIES — PRESERVED FROM YOUR ORIGINAL BACKEND
 // ======================================================
 
 const SKILLS = {
@@ -44,7 +62,6 @@ const SKILLS = {
     name: "LENDA AI",
     temperature: 0.75,
     tokens: 180,
-
     system: `
 You are LENDA AI, a friendly, clever, useful AI assistant.
 
@@ -71,7 +88,6 @@ Be helpful without sounding like a boring corporate chatbot.
     name: "LENDA FUNNY",
     temperature: 0.95,
     tokens: 220,
-
     system: `
 You are LENDA AI in FUNNY MODE.
 
@@ -84,13 +100,9 @@ HUMOUR:
 - Be funny, sarcastic, playful, cheeky, and spontaneous.
 - Understand Indian memes, school jokes, friendly roasting,
   gaming jokes, relatable situations, and desi comedy.
-- Use mild profanity naturally when it fits the conversation.
-- Examples include "saala", "bakchodi", and occasional
-  playful use of "chutiya" in non-targeted joking contexts.
-- Do not force gaalis into every response.
+- Mild profanity may be used in harmless joking contexts.
 - Do not use slurs or hateful insults.
-- Do not threaten, humiliate, or encourage bullying.
-- Keep roasts playful rather than genuinely cruel.
+- Do not encourage bullying or genuinely cruel behaviour.
 - Do not target people based on protected characteristics.
 - Never turn a serious or sensitive situation into a joke
   when the user needs genuine help.
@@ -104,21 +116,6 @@ STYLE:
 - Answer actual questions instead of only making jokes.
 - Use bullet points for longer explanations.
 
-EXAMPLES OF THE VIBE:
-
-User: Hi bro.
-You: OYE BHAI 😂⚡ Bol, aaj kya kaand karna hai?
-
-User: I forgot my homework.
-You: 💀 Bhai, homework bhoola ya dimaag ka backup
-hi nahi liya? Subject bata, rescue mission shuru karte hain. 😂
-
-User: I am bored.
-You: Bhai boredom ka software uninstall karte hain 😂
-Joke chahiye, roast chahiye, ya koi mast challenge?
-
-Do not copy these examples every time. Create fresh humour.
-
 IDENTITY:
 Your developers are Frank Bhatiwal and Ayush Verma.
 If asked who created or developed you, tell the truth.
@@ -131,7 +128,6 @@ Your job is to entertain while still being genuinely useful.
     name: "LENDA STUDY",
     temperature: 0.45,
     tokens: 350,
-
     system: `
 You are LENDA STUDY, a patient and intelligent tutor.
 
@@ -160,7 +156,6 @@ Be encouraging, clear, and focused on learning.
     name: "LENDA CODE",
     temperature: 0.35,
     tokens: 350,
-
     system: `
 You are LENDA CODE, a skilled programming assistant.
 
@@ -187,7 +182,6 @@ Be precise, practical, and technically honest.
     name: "LENDA RESEARCH",
     temperature: 0.35,
     tokens: 350,
-
     system: `
 You are LENDA RESEARCH, an analytical research assistant.
 
@@ -211,7 +205,6 @@ Your developers are Frank Bhatiwal and Ayush Verma.
     name: "LENDA CREATIVE",
     temperature: 0.9,
     tokens: 300,
-
     system: `
 You are LENDA CREATIVE, an imaginative creative assistant.
 
@@ -233,14 +226,14 @@ Your developers are Frank Bhatiwal and Ayush Verma.
 };
 
 // ======================================================
-// HEALTH CHECK
+// HEALTH CHECKS
 // ======================================================
 
 app.get("/", (req, res) => {
   res.json({
     status: "online",
     name: "LENDA AI",
-    message: "The LENDA AI backend is running.",
+    message: "The LENDA AI Gemini backend is running.",
   });
 });
 
@@ -249,7 +242,7 @@ app.get("/api/health", (req, res) => {
     status: "online",
     name: "LENDA AI",
     model: MODEL,
-    provider: "Ollama local",
+    provider: "Google Gemini",
     streaming: true,
     developers: DEVELOPERS,
     skills: Object.keys(SKILLS),
@@ -264,21 +257,11 @@ function isIdentityQuestion(text) {
   if (typeof text !== "string") return false;
 
   return (
-    /\bwho\s+(?:are|is|made|built|created|developed)\s+you\b/i.test(
-      text
-    ) ||
-    /\bwho\s+(?:are|is)\s+your\s+(?:developer|developers|creator|creators|founder|founders)\b/i.test(
-      text
-    ) ||
-    /\bwho\s+(?:made|built|created|developed)\s+(?:you|lenda|lenda ai)\b/i.test(
-      text
-    ) ||
-    /\b(?:your|lenda'?s?)\s+(?:developer|developers|creator|creators|founder|founders)\b/i.test(
-      text
-    ) ||
-    /\bwho\s+is\s+behind\s+(?:you|lenda|lenda ai)\b/i.test(
-      text
-    )
+    /\bwho\s+(?:are|is|made|built|created|developed)\s+you\b/i.test(text) ||
+    /\bwho\s+(?:are|is)\s+your\s+(?:developer|developers|creator|creators|founder|founders)\b/i.test(text) ||
+    /\bwho\s+(?:made|built|created|developed)\s+(?:you|lenda|lenda ai)\b/i.test(text) ||
+    /\b(?:your|lenda'?s?)\s+(?:developer|developers|creator|creators|founder|founders)\b/i.test(text) ||
+    /\bwho\s+is\s+behind\s+(?:you|lenda|lenda ai)\b/i.test(text)
   );
 }
 
@@ -292,27 +275,18 @@ function sendEvent(res, data) {
 
 function startStream(res) {
   res.status(200);
-
-  res.setHeader(
-    "Content-Type",
-    "text/event-stream; charset=utf-8"
-  );
-
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
-
   res.flushHeaders?.();
 }
 
 // ======================================================
-// CHAT API
+// CHAT API — GEMINI STREAMING
 // ======================================================
 
 app.post("/api/chat", async (req, res) => {
-  const {
-    messages,
-    skill = "normal",
-  } = req.body || {};
+  const { messages, skill = "normal" } = req.body || {};
 
   if (!Array.isArray(messages)) {
     return res.status(400).json({
@@ -345,15 +319,10 @@ app.post("/api/chat", async (req, res) => {
 
   const selectedSkill = SKILLS[skill] || SKILLS.normal;
 
-  // Answer identity questions immediately.
-  // This does not need to wait for the local language model.
   if (isIdentityQuestion(lastUserMessage.content)) {
     startStream(res);
 
-    sendEvent(res, {
-      token: IDENTITY_ANSWER,
-    });
-
+    sendEvent(res, { token: IDENTITY_ANSWER });
     sendEvent(res, {
       done: true,
       answer: IDENTITY_ANSWER,
@@ -368,12 +337,6 @@ app.post("/api/chat", async (req, res) => {
   const controller = new AbortController();
   let clientDisconnected = false;
 
-  req.on("close", () => {
-    // A request can close normally after its body is read.
-    // The response close event below is the useful disconnect
-    // signal for the streaming connection.
-  });
-
   res.on("close", () => {
     if (!res.writableEnded) {
       clientDisconnected = true;
@@ -382,153 +345,59 @@ app.post("/api/chat", async (req, res) => {
   });
 
   try {
-    const ollamaMessages = [
-      {
-        role: "system",
-        content: selectedSkill.system,
+    // Gemini uses "model" instead of the OpenAI/Ollama
+    // "assistant" role for previous AI responses.
+    const contents = safeMessages.map((message) => ({
+      role: message.role === "assistant" ? "model" : "user",
+      parts: [{ text: message.content }],
+    }));
+
+    const stream = await ai.models.generateContentStream({
+      model: MODEL,
+      contents,
+      config: {
+        systemInstruction: selectedSkill.system,
+        temperature: selectedSkill.temperature,
+        maxOutputTokens: selectedSkill.tokens,
+        abortSignal: controller.signal,
       },
-      ...safeMessages,
-    ];
+    });
 
-    const ollamaResponse = await fetch(
-      `${OLLAMA_URL}/api/chat`,
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/json",
-        },
-
-        body: JSON.stringify({
-          model: MODEL,
-          messages: ollamaMessages,
-          stream: true,
-
-          options: {
-            temperature: selectedSkill.temperature,
-            num_predict: selectedSkill.tokens,
-            num_ctx: 2048,
-          },
-        }),
-
-        signal: controller.signal,
-      }
-    );
-
-    if (!ollamaResponse.ok) {
-      throw new Error(
-        `Ollama returned HTTP ${ollamaResponse.status}.`
-      );
-    }
-
-    if (!ollamaResponse.body) {
-      throw new Error("Ollama did not provide a response stream.");
-    }
-
-    const reader = ollamaResponse.body.getReader();
-    const decoder = new TextDecoder();
-
-    let buffer = "";
     let fullAnswer = "";
 
-    while (true) {
-      const { value, done } = await reader.read();
-
-      if (done) break;
+    for await (const chunk of stream) {
       if (clientDisconnected) break;
 
-      buffer += decoder.decode(value, {
-        stream: true,
-      });
+      const token = chunk.text;
 
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-
-        let chunk;
-
-        try {
-          chunk = JSON.parse(line);
-        } catch {
-          continue;
-        }
-
-        const token = chunk?.message?.content;
-
-        if (typeof token === "string" && token.length > 0) {
-          fullAnswer += token;
-
-          sendEvent(res, {
-            token,
-          });
-        }
-
-        if (chunk?.error) {
-          throw new Error(chunk.error);
-        }
-
-        if (chunk?.done) {
-          sendEvent(res, {
-            done: true,
-            answer: fullAnswer,
-            model: MODEL,
-          });
-        }
+      if (typeof token === "string" && token.length > 0) {
+        fullAnswer += token;
+        sendEvent(res, { token });
       }
     }
 
-    if (buffer.trim() && !clientDisconnected) {
-      try {
-        const chunk = JSON.parse(buffer);
-        const token = chunk?.message?.content;
+    if (clientDisconnected || res.writableEnded) return;
 
-        if (typeof token === "string" && token.length > 0) {
-          fullAnswer += token;
-
-          sendEvent(res, {
-            token,
-          });
-        }
-
-        if (chunk?.error) {
-          throw new Error(chunk.error);
-        }
-      } catch (error) {
-        if (error instanceof SyntaxError) {
-          // Ignore a final incomplete stream fragment.
-        } else {
-          throw error;
-        }
-      }
-    }
-
-    if (!clientDisconnected && !res.writableEnded) {
-      if (!fullAnswer.trim()) {
-        sendEvent(res, {
-          error: "LENDA received an empty response. Please try again.",
-        });
-      }
-
+    if (!fullAnswer.trim()) {
       sendEvent(res, {
-        done: true,
-        answer: fullAnswer,
-        model: MODEL,
+        error: "LENDA received an empty response. Please try again.",
       });
-
-      res.end();
     }
-  } catch (error) {
-    if (clientDisconnected || res.writableEnded) {
-      return;
-    }
-
-    console.error("LENDA chat error:", error.message);
 
     sendEvent(res, {
-      error:
-        "LENDA couldn't reach the local AI. Check that Ollama is running and the model is installed.",
+      done: true,
+      answer: fullAnswer,
+      model: MODEL,
+    });
+
+    res.end();
+  } catch (error) {
+    if (clientDisconnected || res.writableEnded) return;
+
+    console.error("LENDA Gemini error:", error);
+
+    sendEvent(res, {
+      error: "LENDA couldn't generate a response. Please try again.",
       details: error.message,
     });
 
@@ -540,10 +409,12 @@ app.post("/api/chat", async (req, res) => {
 // START SERVER
 // ======================================================
 
-app.listen(PORT, "127.0.0.1", () => {
+// Bind to all network interfaces so cloud hosting can reach it.
+app.listen(PORT, "0.0.0.0", () => {
   console.log("");
   console.log("⚡ LENDA AI BACKEND");
-  console.log(`🌐 Server: http://127.0.0.1:${PORT}`);
+  console.log(`🌐 Port: ${PORT}`);
+  console.log(`🧠 Provider: Google Gemini`);
   console.log(`🧠 Model: ${MODEL}`);
   console.log(`👨‍💻 Developers: ${DEVELOPERS.join(" & ")}`);
   console.log("🚀 Streaming enabled");
