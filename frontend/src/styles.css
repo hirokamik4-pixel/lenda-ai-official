@@ -2636,4 +2636,446 @@ button:disabled {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}/* ============================================
+   LENDA AI — RESPONSIVE LAYOUT OVERRIDES
+   ============================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  margin: 0;
+}
+
+html,
+body {
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.lenda-app {
+  display: flex;
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar {
+  position: relative;
+  z-index: 20;
+  flex: 0 0 260px;
+  width: 260px;
+  min-width: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.main-panel {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  width: 0;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.topbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.topbar-left,
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.topbar-left > div:last-child {
+  min-width: 0;
+}
+
+.topbar-title,
+.topbar-subtitle,
+.message-author,
+.brand-name,
+.brand-version {
+  overflow-wrap: anywhere;
+}
+
+.conversation {
+  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.welcome-screen {
+  width: 100%;
+  max-width: 850px;
+  min-width: 0;
+  margin-inline: auto;
+  padding: clamp(16px, 4vw, 40px);
+}
+
+.suggestion-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.suggestion-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.suggestion-card > span:nth-child(2) {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.message-list {
+  width: 100%;
+  max-width: 900px;
+  min-width: 0;
+  margin-inline: auto;
+  padding: 20px clamp(12px, 3vw, 30px);
+}
+
+.message-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.message-avatar {
+  flex: 0 0 auto;
+}
+
+.message-body {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.message-content {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.composer-area {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.composer textarea {
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 16px;
+}
+
+.send-button {
+  flex: 0 0 auto;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.composer-caption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 5px 12px;
+  width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.developer-credit {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+/* Backdrop is hidden on desktop. */
+.sidebar-backdrop {
+  display: none;
+}
+
+/* ============================================
+   TABLET
+   ============================================ */
+
+@media (max-width: 900px) {
+  .sidebar {
+    flex-basis: 225px;
+    width: 225px;
+  }
+
+  .message-list {
+    padding-inline: 16px;
+  }
+}
+
+/* ============================================
+   MOBILE
+   ============================================ */
+
+@media (max-width: 600px) {
+  .lenda-app {
+    width: 100%;
+    max-width: 100%;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .sidebar {
+    position: absolute;
+    z-index: 60;
+    inset: 0 auto 0 0;
+    width: min(290px, 86vw);
+    max-width: 86vw;
+    height: 100%;
+    flex: none;
+    background: #0b0b14;
+    box-shadow: 14px 0 40px rgba(0, 0, 0, 0.4);
+    transition:
+      transform 0.22s ease,
+      visibility 0.22s ease;
+  }
+
+  .sidebar.sidebar-closed {
+    transform: translateX(-105%);
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: absolute;
+    z-index: 50;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  .main-panel {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .topbar {
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .topbar-left {
+    flex: 1 1 auto;
+    gap: 8px;
+  }
+
+  .topbar-mode-icon {
+    flex: 0 0 auto;
+  }
+
+  .topbar-title {
+    font-size: clamp(14px, 4vw, 18px);
+  }
+
+  .topbar-subtitle {
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .topbar-right {
+    flex: 0 0 auto;
+    gap: 5px;
+  }
+
+  .status-text {
+    font-size: 10px;
+  }
+
+  .welcome-screen {
+    padding: 20px 14px;
+  }
+
+  .welcome-screen h1 {
+    max-width: 100%;
+    font-size: clamp(25px, 8vw, 38px);
+    overflow-wrap: anywhere;
+  }
+
+  .hero-subtitle {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .hero-orb {
+    max-width: 100%;
+    transform: scale(0.85);
+    transform-origin: center;
+  }
+
+  .suggestion-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .suggestion-card {
+    min-height: 48px;
+    padding: 12px;
+  }
+
+  .message-list {
+    padding: 16px 12px;
+  }
+
+  .message-row {
+    gap: 8px;
+  }
+
+  .message-avatar {
+    flex: 0 0 30px;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    font-size: 15px;
+  }
+
+  .message-content {
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  .composer-area {
+    padding: 8px 10px max(8px, env(safe-area-inset-bottom));
+  }
+
+  .composer {
+    gap: 8px;
+  }
+
+  .composer textarea {
+    min-height: 44px;
+    max-height: 120px;
+    padding: 12px;
+    font-size: 16px;
+  }
+
+  .send-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .composer-caption {
+    justify-content: center;
+    gap: 4px 10px;
+    padding: 7px 2px 2px;
+    font-size: 10px;
+    line-height: 1.4;
+    text-align: center;
+  }
+
+  .developer-credit {
+    padding: 5px 8px;
+    font-size: 9px;
+    line-height: 1.4;
+  }
+
+  .message-actions button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
+/* Small phones */
+@media (max-width: 360px) {
+  .topbar {
+    padding-inline: 8px;
+  }
+
+  .topbar-subtitle {
+    font-size: 9px;
+  }
+
+  .welcome-screen {
+    padding-inline: 10px;
+  }
+
+  .message-list {
+    padding-inline: 8px;
+  }
+
+  .composer-area {
+    padding-inline: 7px;
+  }
+
+  .composer-caption {
+    font-size: 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
 }

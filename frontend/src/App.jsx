@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import "./styles.css";
 
 // ======================================================
-// LENDA AI CONFIGURATION
+// LENDA AI — CLOUD CONFIGURATION
 // ======================================================
 
-const API_URL = "http://127.0.0.1:3001/api/chat";
+const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  "https://lenda-ai-backend.onrender.com/api/chat"
+).replace(/\/+$/, "");
 
 const DEVELOPERS = "Frank Bhatiwal and Ayush Verma";
 
@@ -20,7 +23,6 @@ const MODES = [
     suggestion: "Explain black holes in simple words",
     accent: "#c084fc",
   },
-
   {
     id: "funny",
     label: "Funny",
@@ -31,7 +33,6 @@ const MODES = [
     suggestion: "Roast me in Hinglish",
     accent: "#fb7185",
   },
-
   {
     id: "study",
     label: "Study",
@@ -42,7 +43,6 @@ const MODES = [
     suggestion: "Explain photosynthesis step by step",
     accent: "#fbbf24",
   },
-
   {
     id: "coding",
     label: "Coding",
@@ -53,7 +53,6 @@ const MODES = [
     suggestion: "Create a responsive website with React",
     accent: "#34d399",
   },
-
   {
     id: "research",
     label: "Research",
@@ -64,7 +63,6 @@ const MODES = [
     suggestion: "Explain how large language models work",
     accent: "#67e8f9",
   },
-
   {
     id: "creative",
     label: "Creative",
@@ -89,7 +87,7 @@ function makeId() {
 }
 
 function makeChat(mode = "normal") {
-  const modeInfo = MODES.find((item) => item.id === mode) || MODES[0];
+  const info = MODES.find((item) => item.id === mode) || MODES[0];
 
   return {
     id: makeId(),
@@ -97,12 +95,11 @@ function makeChat(mode = "normal") {
     mode,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-
     messages: [
       {
         id: makeId(),
         role: "assistant",
-        content: modeInfo.greeting,
+        content: info.greeting,
       },
     ],
   };
@@ -111,11 +108,9 @@ function makeChat(mode = "normal") {
 function getSavedChats() {
   try {
     const stored = localStorage.getItem("lenda-chats-v2");
-
     if (!stored) return [];
 
     const parsed = JSON.parse(stored);
-
     if (!Array.isArray(parsed)) return [];
 
     return parsed.filter(
@@ -139,7 +134,11 @@ function makeTitle(text) {
     : cleaned;
 }
 
-function copyToClipboard(text) {
+async function copyToClipboard(text) {
+  if (!navigator.clipboard?.writeText) {
+    throw new Error("Clipboard access is unavailable.");
+  }
+
   return navigator.clipboard.writeText(text);
 }
 
@@ -148,30 +147,23 @@ function copyToClipboard(text) {
 // ======================================================
 
 function MessageContent({ content }) {
-  const lines = String(content || "").split("\n");
-
   return (
     <div className="message-content">
-      {lines.map((line, index) => (
-        <div key={`${index}-${line.slice(0, 15)}`}>
-          {line || "\u00A0"}
-        </div>
-      ))}
+      {String(content || "")
+        .split("\n")
+        .map((line, index) => (
+          <div key={`${index}-${line.slice(0, 15)}`}>
+            {line || "\u00A0"}
+          </div>
+        ))}
     </div>
   );
 }
 
-// ======================================================
-// TYPING INDICATOR
-// ======================================================
-
 function TypingIndicator({ elapsed }) {
   return (
     <div className="thinking-box">
-      <div
-        className="typing-indicator"
-        aria-label="LENDA is thinking"
-      >
+      <div className="typing-indicator" aria-label="LENDA is thinking">
         <span />
         <span />
         <span />
@@ -182,16 +174,10 @@ function TypingIndicator({ elapsed }) {
         <span className="thinking-ellipsis">...</span>
       </span>
 
-      <span className="thinking-time">
-        {elapsed}s
-      </span>
+      <span className="thinking-time">{elapsed}s</span>
     </div>
   );
 }
-
-// ======================================================
-// MESSAGE ACTIONS
-// ======================================================
 
 function MessageActions({ message, onCopy, onSpeak }) {
   if (!message.content) return null;
@@ -226,20 +212,24 @@ function MessageActions({ message, onCopy, onSpeak }) {
 export default function App() {
   const [chats, setChats] = useState(() => {
     const saved = getSavedChats();
-
     return saved.length ? saved : [makeChat()];
   });
 
   const [activeChatId, setActiveChatId] = useState(() => {
-    const saved = getSavedChats();
-
-    return saved[0]?.id || null;
+    return getSavedChats()[0]?.id || null;
   });
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Desktop sidebar open; mobile sidebar closed initially.
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 601px)").matches
+  );
+
   const [notice, setNotice] = useState("");
 
   const abortRef = useRef(null);
@@ -248,32 +238,21 @@ export default function App() {
   const busyRef = useRef(false);
 
   const activeChat =
-    chats.find((chat) => chat.id === activeChatId) ||
-    chats[0];
+    chats.find((chat) => chat.id === activeChatId) || chats[0];
 
   const activeMode =
-    MODES.find((mode) => mode.id === activeChat?.mode) ||
-    MODES[0];
+    MODES.find((mode) => mode.id === activeChat?.mode) || MODES[0];
 
-  // ----------------------------------------------------
-  // PERSIST HISTORY
-  // ----------------------------------------------------
-
+  // Save chat history in this browser.
   useEffect(() => {
     try {
-      localStorage.setItem(
-        "lenda-chats-v2",
-        JSON.stringify(chats)
-      );
+      localStorage.setItem("lenda-chats-v2", JSON.stringify(chats));
     } catch {
       setNotice("Chat history could not be saved in this browser.");
     }
   }, [chats]);
 
-  // ----------------------------------------------------
-  // SCROLL TO LATEST MESSAGE
-  // ----------------------------------------------------
-
+  // Keep the latest message visible.
   useEffect(() => {
     endRef.current?.scrollIntoView({
       behavior: "smooth",
@@ -281,10 +260,7 @@ export default function App() {
     });
   }, [activeChat?.messages, busy]);
 
-  // ----------------------------------------------------
-  // THINKING TIMER
-  // ----------------------------------------------------
-
+  // Thinking timer.
   useEffect(() => {
     if (!busy) {
       setElapsed(0);
@@ -294,58 +270,35 @@ export default function App() {
     const started = Date.now();
 
     const timer = setInterval(() => {
-      setElapsed(
-        Math.floor((Date.now() - started) / 1000)
-      );
+      setElapsed(Math.floor((Date.now() - started) / 1000));
     }, 250);
 
     return () => clearInterval(timer);
   }, [busy]);
 
-  // ----------------------------------------------------
-  // NOTICE TIMER
-  // ----------------------------------------------------
-
+  // Clear notices automatically.
   useEffect(() => {
     if (!notice) return;
 
-    const timer = setTimeout(() => {
-      setNotice("");
-    }, 3500);
+    const timer = setTimeout(() => setNotice(""), 4000);
 
     return () => clearTimeout(timer);
   }, [notice]);
 
-  // ----------------------------------------------------
-  // CLEANUP STREAM WHEN UNMOUNTING
-  // ----------------------------------------------------
-
+  // Stop a running request when the app unmounts.
   useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-    };
+    return () => abortRef.current?.abort();
   }, []);
-
-  // ----------------------------------------------------
-  // UPDATE A CHAT
-  // ----------------------------------------------------
 
   function updateChat(chatId, updater) {
     setChats((previous) =>
       previous.map((chat) =>
         chat.id === chatId
-          ? {
-              ...updater(chat),
-              updatedAt: Date.now(),
-            }
+          ? { ...updater(chat), updatedAt: Date.now() }
           : chat
       )
     );
   }
-
-  // ----------------------------------------------------
-  // NEW CHAT
-  // ----------------------------------------------------
 
   function createNewChat(mode = activeMode.id) {
     if (busyRef.current) {
@@ -355,22 +308,17 @@ export default function App() {
 
     const newChat = makeChat(mode);
 
-    setChats((previous) => [
-      newChat,
-      ...previous,
-    ]);
-
+    setChats((previous) => [newChat, ...previous]);
     setActiveChatId(newChat.id);
     setInput("");
 
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-  }
+    // Close the navigation drawer on mobile.
+    if (window.matchMedia("(max-width: 600px)").matches) {
+      setSidebarOpen(false);
+    }
 
-  // ----------------------------------------------------
-  // CHANGE MODE
-  // ----------------------------------------------------
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
 
   function changeMode(mode) {
     if (busyRef.current) {
@@ -381,10 +329,6 @@ export default function App() {
     createNewChat(mode);
   }
 
-  // ----------------------------------------------------
-  // SELECT CHAT
-  // ----------------------------------------------------
-
   function selectChat(chatId) {
     if (busyRef.current) {
       setNotice("Wait for the current reply to finish first.");
@@ -393,11 +337,11 @@ export default function App() {
 
     setActiveChatId(chatId);
     setInput("");
-  }
 
-  // ----------------------------------------------------
-  // DELETE CHAT
-  // ----------------------------------------------------
+    if (window.matchMedia("(max-width: 600px)").matches) {
+      setSidebarOpen(false);
+    }
+  }
 
   function deleteChat(chatId) {
     if (busyRef.current) {
@@ -405,13 +349,10 @@ export default function App() {
       return;
     }
 
-    const remaining = chats.filter(
-      (chat) => chat.id !== chatId
-    );
+    const remaining = chats.filter((chat) => chat.id !== chatId);
 
-    if (remaining.length === 0) {
+    if (!remaining.length) {
       const newChat = makeChat(activeMode.id);
-
       setChats([newChat]);
       setActiveChatId(newChat.id);
       return;
@@ -424,10 +365,6 @@ export default function App() {
     }
   }
 
-  // ----------------------------------------------------
-  // COPY
-  // ----------------------------------------------------
-
   async function copyText(text) {
     try {
       await copyToClipboard(text);
@@ -436,10 +373,6 @@ export default function App() {
       setNotice("Clipboard access was blocked.");
     }
   }
-
-  // ----------------------------------------------------
-  // TEXT TO SPEECH
-  // ----------------------------------------------------
 
   function speakText(text) {
     if (!("speechSynthesis" in window)) {
@@ -450,20 +383,14 @@ export default function App() {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-
     utterance.rate = 1;
     utterance.pitch = 1;
 
     window.speechSynthesis.speak(utterance);
   }
 
-  // ----------------------------------------------------
-  // STOP GENERATION
-  // ----------------------------------------------------
-
   function stopGeneration() {
     abortRef.current?.abort();
-
     abortRef.current = null;
 
     busyRef.current = false;
@@ -471,20 +398,16 @@ export default function App() {
     setNotice("Generation stopped.");
   }
 
-  // ----------------------------------------------------
-  // SEND MESSAGE
-  // ----------------------------------------------------
+  // ====================================================
+  // SEND MESSAGE — STREAM FROM GEMINI BACKEND
+  // ====================================================
 
   async function sendMessage(textOverride) {
     const text = (
-      typeof textOverride === "string"
-        ? textOverride
-        : input
+      typeof textOverride === "string" ? textOverride : input
     ).trim();
 
-    if (!text || busyRef.current || !activeChat) {
-      return;
-    }
+    if (!text || busyRef.current || !activeChat) return;
 
     const chatId = activeChat.id;
     const mode = activeChat.mode;
@@ -510,63 +433,51 @@ export default function App() {
     updateChat(chatId, (chat) => ({
       ...chat,
       title:
-        chat.title === "New chat"
-          ? makeTitle(text)
-          : chat.title,
+        chat.title === "New chat" ? makeTitle(text) : chat.title,
       messages: updatedMessages,
     }));
 
     setInput("");
+    setNotice("");
 
     busyRef.current = true;
     setBusy(true);
     setElapsed(0);
-    setNotice("");
 
     const controller = new AbortController();
-
     abortRef.current = controller;
 
     try {
       const response = await fetch(API_URL, {
         method: "POST",
-
         headers: {
           "Content-Type": "application/json",
+          Accept: "text/event-stream, application/json",
         },
-
         body: JSON.stringify({
           skill: mode,
           messages: updatedMessages
             .filter((message) => message.content)
-            .map((message) => ({
-              role: message.role,
-              content: message.content,
-            })),
+            .map(({ role, content }) => ({ role, content })),
         }),
-
         signal: controller.signal,
       });
 
       if (!response.ok) {
-        let errorMessage =
-          `Backend returned HTTP ${response.status}.`;
+        let message = `Backend returned HTTP ${response.status}.`;
 
         try {
-          const errorData = await response.json();
-
-          if (errorData.error) {
-            errorMessage = errorData.error;
-          }
+          const data = await response.json();
+          if (data.error) message = data.error;
         } catch {
-          // Keep the original error.
+          // Use the HTTP status message.
         }
 
-        throw new Error(errorMessage);
+        throw new Error(message);
       }
 
       if (!response.body) {
-        throw new Error("The backend did not return a response stream.");
+        throw new Error("The backend returned an empty response.");
       }
 
       const reader = response.body.getReader();
@@ -578,13 +489,9 @@ export default function App() {
       function updateAssistantContent(content) {
         updateChat(chatId, (chat) => ({
           ...chat,
-
           messages: chat.messages.map((message) =>
             message.id === assistantMessage.id
-              ? {
-                  ...message,
-                  content,
-                }
+              ? { ...message, content }
               : message
           ),
         }));
@@ -592,7 +499,7 @@ export default function App() {
 
       function processEventBlock(block) {
         const dataLines = block
-          .split("\n")
+          .split(/\r?\n/)
           .filter((line) => line.startsWith("data:"))
           .map((line) => line.slice(5).trim());
 
@@ -615,20 +522,21 @@ export default function App() {
         if (typeof data.token === "string") {
           receivedAnswer += data.token;
           updateAssistantContent(receivedAnswer);
+        } else if (typeof data.text === "string") {
+          // Also support a backend that emits text instead of token.
+          receivedAnswer += data.text;
+          updateAssistantContent(receivedAnswer);
         }
       }
 
       while (true) {
         const { value, done } = await reader.read();
-
         if (done) break;
 
-        buffer += decoder.decode(value, {
-          stream: true,
-        });
+        buffer += decoder.decode(value, { stream: true });
 
-        const blocks = buffer.split("\n\n");
-
+        // Support both LF and CRLF event separators.
+        const blocks = buffer.split(/\r?\n\r?\n/);
         buffer = blocks.pop() || "";
 
         for (const block of blocks) {
@@ -644,30 +552,34 @@ export default function App() {
 
       if (!receivedAnswer.trim()) {
         throw new Error(
-          "LENDA returned no text. Check Ollama and try again."
+          "LENDA returned no text. Check the cloud backend logs and try again."
         );
       }
     } catch (error) {
-      if (error.name === "AbortError") {
-        return;
-      }
+      if (error.name === "AbortError") return;
 
       console.error("LENDA frontend error:", error);
 
-      const errorMessage =
-        `⚠️ ${error.message || "Something went wrong."}\n\n` +
-        "Check that the backend and Ollama are running.";
+      let message = error.message || "Something went wrong.";
+
+      if (
+        error instanceof TypeError ||
+        /failed to fetch|networkerror/i.test(message)
+      ) {
+        message =
+          "Could not connect to LENDA's cloud backend. " +
+          "Check your internet connection, the Render service, and its CORS settings.";
+      }
 
       updateChat(chatId, (chat) => ({
         ...chat,
-
-        messages: chat.messages.map((message) =>
-          message.id === assistantMessage.id
+        messages: chat.messages.map((item) =>
+          item.id === assistantMessage.id
             ? {
-                ...message,
-                content: errorMessage,
+                ...item,
+                content: `⚠️ ${message}`,
               }
-            : message
+            : item
         ),
       }));
     } finally {
@@ -675,65 +587,58 @@ export default function App() {
       setBusy(false);
       abortRef.current = null;
 
-      requestAnimationFrame(() => {
-        inputRef.current?.focus();
-      });
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   }
 
-  // ----------------------------------------------------
-  // KEYBOARD SHORTCUTS
-  // ----------------------------------------------------
-
   function handleKeyDown(event) {
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey
-    ) {
+    if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       sendMessage();
     }
   }
 
-  // ----------------------------------------------------
-  // EMPTY FALLBACK
-  // ----------------------------------------------------
-
   if (!activeChat) {
     return (
       <div className="lenda-app">
-        <button
-          type="button"
-          onClick={() => createNewChat("normal")}
-        >
+        <button type="button" onClick={() => createNewChat("normal")}>
           Start LENDA AI
         </button>
       </div>
     );
   }
 
-  // ----------------------------------------------------
+  // ====================================================
   // RENDER
-  // ----------------------------------------------------
+  // ====================================================
 
   return (
     <div
       className={`lenda-app mode-${activeMode.id}`}
-      style={{
-        "--accent": activeMode.accent,
-      }}
+      style={{ "--accent": activeMode.accent }}
     >
       <div className="ambient-background" />
 
+      {/* Mobile drawer backdrop */}
+      {sidebarOpen && (
+        <button
+          type="button"
+          className="sidebar-backdrop"
+          aria-label="Close navigation"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       <aside
         className={`sidebar ${sidebarOpen ? "" : "sidebar-closed"}`}
+        aria-label="LENDA navigation"
       >
         <div className="sidebar-brand">
           <div className="brand-symbol">ϟ</div>
 
           <div>
             <div className="brand-name">LENDA AI</div>
-            <div className="brand-version">LOCAL INTELLIGENCE</div>
+            <div className="brand-version">CLOUD INTELLIGENCE</div>
           </div>
         </div>
 
@@ -746,9 +651,7 @@ export default function App() {
           <span>＋</span> New chat
         </button>
 
-        <div className="sidebar-section-label">
-          PERSONALITIES
-        </div>
+        <div className="sidebar-section-label">PERSONALITIES</div>
 
         <div className="mode-list">
           {MODES.map((mode) => (
@@ -756,9 +659,7 @@ export default function App() {
               key={mode.id}
               type="button"
               className={`mode-button ${
-                activeMode.id === mode.id
-                  ? "mode-active"
-                  : ""
+                activeMode.id === mode.id ? "mode-active" : ""
               }`}
               onClick={() => changeMode(mode.id)}
               disabled={busy}
@@ -780,16 +681,13 @@ export default function App() {
         <div className="chat-history">
           {chats.map((chat) => {
             const chatMode =
-              MODES.find((mode) => mode.id === chat.mode) ||
-              MODES[0];
+              MODES.find((mode) => mode.id === chat.mode) || MODES[0];
 
             return (
               <div
                 key={chat.id}
                 className={`history-item ${
-                  activeChatId === chat.id
-                    ? "history-active"
-                    : ""
+                  activeChatId === chat.id ? "history-active" : ""
                 }`}
               >
                 <button
@@ -799,16 +697,14 @@ export default function App() {
                   disabled={busy}
                 >
                   <span>{chatMode.icon}</span>
-
-                  <span className="history-title">
-                    {chat.title}
-                  </span>
+                  <span className="history-title">{chat.title}</span>
                 </button>
 
                 <button
                   type="button"
                   className="history-delete"
                   title="Delete chat"
+                  aria-label={`Delete ${chat.title}`}
                   onClick={() => deleteChat(chat.id)}
                   disabled={busy}
                 >
@@ -823,13 +719,8 @@ export default function App() {
           <div className="online-dot" />
 
           <div>
-            <div className="connection-title">
-              LOCAL AI
-            </div>
-
-            <div className="connection-subtitle">
-              Ollama connection
-            </div>
+            <div className="connection-title">CLOUD AI</div>
+            <div className="connection-subtitle">Gemini backend</div>
           </div>
 
           <div className="connection-icon">⚡</div>
@@ -842,30 +733,24 @@ export default function App() {
             <button
               type="button"
               className="icon-button menu-button"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
+              onClick={() => setSidebarOpen((open) => !open)}
               aria-label="Toggle sidebar"
+              aria-expanded={sidebarOpen}
             >
               ☰
             </button>
 
-            <div className="topbar-mode-icon">
-              {activeMode.icon}
-            </div>
+            <div className="topbar-mode-icon">{activeMode.icon}</div>
 
             <div>
-              <div className="topbar-title">
-                {activeMode.title}
-              </div>
-
-              <div className="topbar-subtitle">
-                {activeMode.subtitle}
-              </div>
+              <div className="topbar-title">{activeMode.title}</div>
+              <div className="topbar-subtitle">{activeMode.subtitle}</div>
             </div>
           </div>
 
           <div className="topbar-right">
             <span className="status-indicator" />
-            <span className="status-text">LOCAL</span>
+            <span className="status-text">CLOUD</span>
           </div>
         </header>
 
@@ -875,65 +760,36 @@ export default function App() {
               <div className="hero-orb">
                 <div className="orb-ring orb-ring-one" />
                 <div className="orb-ring orb-ring-two" />
-
-                <div className="orb-core">
-                  {activeMode.icon}
-                </div>
+                <div className="orb-core">{activeMode.icon}</div>
               </div>
 
-              <div className="hero-eyebrow">
-                PERSONAL AI SYSTEM
-              </div>
+              <div className="hero-eyebrow">PERSONAL AI SYSTEM</div>
 
               <h1>{activeMode.title}</h1>
 
-              <p className="hero-subtitle">
-                {activeMode.greeting}
-              </p>
+              <p className="hero-subtitle">{activeMode.greeting}</p>
 
               <div className="suggestion-list">
                 <button
                   type="button"
                   className="suggestion-card"
-                  onClick={() =>
-                    sendMessage(activeMode.suggestion)
-                  }
+                  onClick={() => sendMessage(activeMode.suggestion)}
                   disabled={busy}
                 >
-                  <span className="suggestion-icon">
-                    ✨
-                  </span>
-
-                  <span>
-                    {activeMode.suggestion}
-                  </span>
-
-                  <span className="suggestion-arrow">
-                    →
-                  </span>
+                  <span className="suggestion-icon">✨</span>
+                  <span>{activeMode.suggestion}</span>
+                  <span className="suggestion-arrow">→</span>
                 </button>
 
                 <button
                   type="button"
                   className="suggestion-card"
-                  onClick={() =>
-                    sendMessage(
-                      "Who developed LENDA AI?"
-                    )
-                  }
+                  onClick={() => sendMessage("Who developed LENDA AI?")}
                   disabled={busy}
                 >
-                  <span className="suggestion-icon">
-                    ⚡
-                  </span>
-
-                  <span>
-                    Meet LENDA's developers
-                  </span>
-
-                  <span className="suggestion-arrow">
-                    →
-                  </span>
+                  <span className="suggestion-icon">⚡</span>
+                  <span>Meet LENDA's developers</span>
+                  <span className="suggestion-arrow">→</span>
                 </button>
               </div>
             </div>
@@ -949,41 +805,31 @@ export default function App() {
                   <article
                     key={message.id}
                     className={`message-row ${
-                      message.role === "user"
-                        ? "user-row"
-                        : "assistant-row"
+                      message.role === "user" ? "user-row" : "assistant-row"
                     }`}
                   >
                     <div className="message-avatar">
-                      {message.role === "user"
-                        ? "👤"
-                        : activeMode.icon}
+                      {message.role === "user" ? "👤" : activeMode.icon}
                     </div>
 
                     <div className="message-body">
                       <div className="message-author">
-                        {message.role === "user"
-                          ? "YOU"
-                          : activeMode.title}
+                        {message.role === "user" ? "YOU" : activeMode.title}
                       </div>
 
-                      {isLatestAssistant &&
-                      !message.content ? (
+                      {isLatestAssistant && !message.content ? (
                         <TypingIndicator elapsed={elapsed} />
                       ) : (
                         <>
-                          <MessageContent
-                            content={message.content}
-                          />
+                          <MessageContent content={message.content} />
 
-                          {!busy &&
-                            message.role === "assistant" && (
-                              <MessageActions
-                                message={message}
-                                onCopy={copyText}
-                                onSpeak={speakText}
-                              />
-                            )}
+                          {!busy && message.role === "assistant" && (
+                            <MessageActions
+                              message={message}
+                              onCopy={copyText}
+                              onSpeak={speakText}
+                            />
+                          )}
                         </>
                       )}
                     </div>
@@ -998,7 +844,7 @@ export default function App() {
 
         <footer className="composer-area">
           {notice && (
-            <div className="notice-message">
+            <div className="notice-message" role="status">
               {notice}
             </div>
           )}
@@ -1007,13 +853,11 @@ export default function App() {
             <textarea
               ref={inputRef}
               value={input}
-              onChange={(event) =>
-                setInput(event.target.value)
-              }
+              onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={
                 activeMode.id === "funny"
-                  ? "Bol bhai, kya bakchodi discuss karein? 😂"
+                  ? "Bol bhai, kya discuss karein? 😂"
                   : "Message LENDA AI..."
               }
               rows={1}
@@ -1046,13 +890,8 @@ export default function App() {
           </div>
 
           <div className="composer-caption">
-            <span>
-              ⚡ Powered by local Ollama
-            </span>
-
-            <span>
-              Enter to send · Shift + Enter for a new line
-            </span>
+            <span>⚡ Powered by Gemini</span>
+            <span>Enter to send · Shift + Enter for a new line</span>
           </div>
         </footer>
 
