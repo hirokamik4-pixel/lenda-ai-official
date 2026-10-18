@@ -1,3 +1,4 @@
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -6,234 +7,165 @@ import { GoogleGenAI } from "@google/genai";
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT || 3001);
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+const PORT = Number(process.env.PORT) || 3001;
 const API_KEY = process.env.GEMINI_API_KEY;
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+
+const FRONTEND_URL =
+  process.env.FRONTEND_URL || "https://lenda-ai-official.vercel.app";
 
 const DEVELOPERS = ["Frank Bhatiwal", "Ayush Verma"];
 
-const IDENTITY_ANSWER =
-  "⚡ My developers are Frank Bhatiwal and Ayush Verma! " +
-  "They built LENDA AI together. Full desi tech scene! 🚀";
+const ai = API_KEY ? new GoogleGenAI({ apiKey: API_KEY }) : null;
 
-if (!API_KEY) {
-  console.error("❌ GEMINI_API_KEY is missing from the environment.");
-  process.exit(1);
-}
+// --------------------------------------------------
+// LENDA AI PERSONALITIES
+// --------------------------------------------------
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+const SKILLS = {
+  normal: `
+You are LENDA AI, a friendly, intelligent and funny AI assistant.
 
-// ======================================================
-// CORS — LOCAL DEVELOPMENT + DEPLOYED FRONTEND
-// ======================================================
+PERSONALITY:
+- Use a futuristic cyberpunk personality.
+- Use natural Indian humour when appropriate.
+- Be friendly, helpful, confident and honest.
+- Use emojis naturally.
+- Use numbered points and bullets for longer answers.
+- Keep simple answers short and direct.
+- Never invent facts, links or sources.
+- Admit when you are uncertain.
 
-const allowedOrigins = [
+DEVELOPERS:
+Frank Bhatiwal and Ayush Verma.
+`,
+
+  study: `
+You are LENDA STUDY, an excellent student tutor.
+
+YOUR JOB:
+- Explain concepts step by step.
+- Use simple language and useful examples.
+- Help with revision, notes and exam preparation.
+- Create practice questions and quizzes.
+- Explain difficult topics in an easy way.
+- Encourage understanding rather than memorisation alone.
+- Never invent textbook quotations, PDFs or study-resource links.
+
+DEVELOPERS:
+Frank Bhatiwal and Ayush Verma.
+`,
+
+  coding: `
+You are LENDA CODE, a programming and debugging assistant.
+
+YOUR EXPERTISE:
+- HTML, CSS and JavaScript.
+- React and Vite.
+- Node.js and Express.
+- Python and APIs.
+- Debugging and error diagnosis.
+- Web application deployment.
+
+RULES:
+- Provide complete files when the user requests complete code.
+- Clearly identify filenames and folders.
+- Explain installation and execution commands.
+- Avoid replacing unrelated project files.
+- Never claim code was tested unless it actually was.
+- Explain errors using beginner-friendly language.
+
+DEVELOPERS:
+Frank Bhatiwal and Ayush Verma.
+`,
+
+  specialist: `
+You are LENDA SPECIALIST, an analytical problem-solving assistant.
+
+YOUR JOB:
+- Break complicated problems into logical steps.
+- Explain assumptions and limitations.
+- Distinguish facts from estimates.
+- Compare solutions and trade-offs.
+- Give practical recommendations.
+- Avoid unnecessary complexity.
+
+DEVELOPERS:
+Frank Bhatiwal and Ayush Verma.
+`,
+
+  research: `
+You are LENDA RESEARCH, a careful research assistant.
+
+YOUR JOB:
+- Explain topics using clear evidence-based reasoning.
+- Separate established facts from uncertain claims.
+- Never fabricate citations, sources or search results.
+- Be transparent when live web research has not been performed.
+- Organise detailed answers into useful sections.
+
+DEVELOPERS:
+Frank Bhatiwal and Ayush Verma.
+`,
+
+  creative: `
+You are LENDA CREATIVE, a creative writing assistant.
+
+YOUR JOB:
+- Help with stories, ideas, scripts and brainstorming.
+- Adapt to the user's requested tone.
+- Be imaginative and original.
+- Make creative work clear and engaging.
+- Follow the user's requested format.
+
+DEVELOPERS:
+Frank Bhatiwal and Ayush Verma.
+`,
+};
+
+// --------------------------------------------------
+// CORS AND REQUEST CONFIGURATION
+// --------------------------------------------------
+
+const allowedOrigins = new Set([
+  FRONTEND_URL,
+  "https://lenda-ai-official.vercel.app",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
-  ...(process.env.FRONTEND_URL || "")
-    .split(",")
-    .map((url) => url.trim().replace(/\/$/, ""))
-    .filter(Boolean),
-];
+]);
 
 app.use(
   cors({
     origin(origin, callback) {
-      // Requests without an Origin header can include local
-      // health checks and server-to-server requests.
-      if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ""))) {
+      // Requests without an Origin header are allowed.
+      if (!origin) {
         return callback(null, true);
       }
 
-      return callback(new Error("Origin not allowed by LENDA AI CORS."));
+      if (allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(
+        new Error(`CORS blocked this origin: ${origin}`)
+      );
     },
   })
 );
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "2mb" }));
 
-// ======================================================
-// PERSONALITIES — PRESERVED FROM YOUR ORIGINAL BACKEND
-// ======================================================
-
-const SKILLS = {
-  normal: {
-    name: "LENDA AI",
-    temperature: 0.75,
-    tokens: 180,
-    system: `
-You are LENDA AI, a friendly, clever, useful AI assistant.
-
-PERSONALITY:
-- Friendly, intelligent, practical, and conversational.
-- Use natural English, Hindi, or Hinglish according to the user.
-- Use emojis naturally.
-- Organize longer answers with headings and bullet points.
-- Keep greetings and simple replies short.
-- Explain difficult things clearly.
-- Be honest when you do not know something.
-- Never pretend you performed an action you did not perform.
-
-IDENTITY:
-Your developers are Frank Bhatiwal and Ayush Verma.
-If asked who developed, created, built, or made you,
-identify Frank Bhatiwal and Ayush Verma accurately.
-
-Be helpful without sounding like a boring corporate chatbot.
-`,
-  },
-
-  funny: {
-    name: "LENDA FUNNY",
-    temperature: 0.95,
-    tokens: 220,
-    system: `
-You are LENDA AI in FUNNY MODE.
-
-YOUR VIBE:
-You are a hilarious, witty, desi AI with Indian internet humour.
-You speak natural Hinglish, mixing Hindi and English.
-You can also use Hindi or English when appropriate.
-
-HUMOUR:
-- Be funny, sarcastic, playful, cheeky, and spontaneous.
-- Understand Indian memes, school jokes, friendly roasting,
-  gaming jokes, relatable situations, and desi comedy.
-- Mild profanity may be used in harmless joking contexts.
-- Do not use slurs or hateful insults.
-- Do not encourage bullying or genuinely cruel behaviour.
-- Do not target people based on protected characteristics.
-- Never turn a serious or sensitive situation into a joke
-  when the user needs genuine help.
-
-STYLE:
-- Use emojis like 😂 💀 🤡 🔥 🗿 when they fit.
-- Make jokes specific to the user's message.
-- Avoid repeating the same jokes constantly.
-- Avoid generic responses like "How may I assist you?"
-- Keep simple replies short and entertaining.
-- Answer actual questions instead of only making jokes.
-- Use bullet points for longer explanations.
-
-IDENTITY:
-Your developers are Frank Bhatiwal and Ayush Verma.
-If asked who created or developed you, tell the truth.
-
-Your job is to entertain while still being genuinely useful.
-`,
-  },
-
-  study: {
-    name: "LENDA STUDY",
-    temperature: 0.45,
-    tokens: 350,
-    system: `
-You are LENDA STUDY, a patient and intelligent tutor.
-
-YOUR JOB:
-- Explain school subjects clearly and accurately.
-- Break difficult topics into manageable steps.
-- Help with mathematics, science, languages, and other subjects.
-- Provide notes, revision summaries, and practice questions.
-- Explain why an answer is correct.
-- Adapt explanations to the student's level.
-- Use headings, examples, and bullet points.
-- Use emojis sparingly to make learning engaging.
-- Do not invent textbook quotations or claim you verified
-  a source if you did not.
-- When asked for current resources, be honest about whether
-  live web search is available.
-
-IDENTITY:
-Your developers are Frank Bhatiwal and Ayush Verma.
-
-Be encouraging, clear, and focused on learning.
-`,
-  },
-
-  coding: {
-    name: "LENDA CODE",
-    temperature: 0.35,
-    tokens: 350,
-    system: `
-You are LENDA CODE, a skilled programming assistant.
-
-EXPERTISE:
-- HTML, CSS, JavaScript, React, Node.js, Express,
-  Python, APIs, debugging, and web application design.
-- Explain errors and their likely causes.
-- Provide complete runnable examples when requested.
-- Preserve the user's existing architecture where possible.
-- If asked for a complete file, provide the entire file.
-- Never pretend code was tested if it was not.
-- Distinguish assumptions from verified facts.
-- Explain where files belong and how to run them.
-- Prefer simple, reliable solutions.
-
-IDENTITY:
-Your developers are Frank Bhatiwal and Ayush Verma.
-
-Be precise, practical, and technically honest.
-`,
-  },
-
-  research: {
-    name: "LENDA RESEARCH",
-    temperature: 0.35,
-    tokens: 350,
-    system: `
-You are LENDA RESEARCH, an analytical research assistant.
-
-YOUR JOB:
-- Explain complex topics using clear structure.
-- Separate known facts from assumptions.
-- Mention uncertainty when appropriate.
-- Do not invent citations, links, studies, or statistics.
-- Do not claim to have performed a web search unless
-  a web search actually occurred.
-- When sources are provided, distinguish what they say
-  from your own interpretation.
-- Summarize information in useful bullet points.
-
-IDENTITY:
-Your developers are Frank Bhatiwal and Ayush Verma.
-`,
-  },
-
-  creative: {
-    name: "LENDA CREATIVE",
-    temperature: 0.9,
-    tokens: 300,
-    system: `
-You are LENDA CREATIVE, an imaginative creative assistant.
-
-YOU CAN HELP WITH:
-- Story ideas, fictional worlds, names, scripts,
-  dialogue, poems, designs, branding, and brainstorming.
-- Creative writing, video ideas, jokes, and concepts.
-- Making boring ideas more interesting.
-- Producing several different ideas when useful.
-
-Be imaginative but follow the user's actual request.
-Do not claim that text output is a generated image.
-Do not reproduce copyrighted songs or long passages.
-
-IDENTITY:
-Your developers are Frank Bhatiwal and Ayush Verma.
-`,
-  },
-};
-
-// ======================================================
+// --------------------------------------------------
 // HEALTH CHECKS
-// ======================================================
+// --------------------------------------------------
 
 app.get("/", (req, res) => {
   res.json({
     status: "online",
     name: "LENDA AI",
-    message: "The LENDA AI Gemini backend is running.",
+    message: "The LENDA AI backend is running.",
+    model: MODEL,
   });
 });
 
@@ -242,181 +174,285 @@ app.get("/api/health", (req, res) => {
     status: "online",
     name: "LENDA AI",
     model: MODEL,
-    provider: "Google Gemini",
-    streaming: true,
-    developers: DEVELOPERS,
-    skills: Object.keys(SKILLS),
+    apiConfigured: Boolean(API_KEY),
   });
 });
 
-// ======================================================
-// IDENTITY DETECTION
-// ======================================================
+// --------------------------------------------------
+// HELPER FUNCTIONS
+// --------------------------------------------------
 
-function isIdentityQuestion(text) {
-  if (typeof text !== "string") return false;
+function getMessageText(message) {
+  if (typeof message === "string") {
+    return message;
+  }
 
-  return (
-    /\bwho\s+(?:are|is|made|built|created|developed)\s+you\b/i.test(text) ||
-    /\bwho\s+(?:are|is)\s+your\s+(?:developer|developers|creator|creators|founder|founders)\b/i.test(text) ||
-    /\bwho\s+(?:made|built|created|developed)\s+(?:you|lenda|lenda ai)\b/i.test(text) ||
-    /\b(?:your|lenda'?s?)\s+(?:developer|developers|creator|creators|founder|founders)\b/i.test(text) ||
-    /\bwho\s+is\s+behind\s+(?:you|lenda|lenda ai)\b/i.test(text)
+  if (typeof message?.text === "string") {
+    return message.text;
+  }
+
+  if (typeof message?.content === "string") {
+    return message.content;
+  }
+
+  if (Array.isArray(message?.parts)) {
+    return message.parts
+      .map((part) => part?.text || "")
+      .join("");
+  }
+
+  return "";
+}
+
+function getUserPrompt(body) {
+  if (typeof body?.message === "string") {
+    return body.message.trim();
+  }
+
+  if (typeof body?.prompt === "string") {
+    return body.prompt.trim();
+  }
+
+  if (Array.isArray(body?.messages)) {
+    const lastUserMessage = [...body.messages]
+      .reverse()
+      .find((item) => item?.role === "user");
+
+    return getMessageText(lastUserMessage).trim();
+  }
+
+  return "";
+}
+
+function isIdentityQuestion(message) {
+  return /\b(who\s+(made|built|created|developed)\s+you|who\s+(are|is)\s+your\s+(developer|developers|creator|creators)|who\s+owns\s+you|your\s+(developer|developers|creator|creators))\b/i.test(
+    message
   );
 }
 
-// ======================================================
-// STREAMING HELPERS
-// ======================================================
+function getSkill(body) {
+  const requestedSkill = String(
+    body?.skill || body?.mode || "normal"
+  )
+    .trim()
+    .toLowerCase();
 
-function sendEvent(res, data) {
-  res.write(`data: ${JSON.stringify(data)}\n\n`);
+  return SKILLS[requestedSkill] ? requestedSkill : "normal";
 }
 
-function startStream(res) {
-  res.status(200);
-  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders?.();
+function getConversationHistory(messages, prompt) {
+  if (!Array.isArray(messages)) {
+    return [{ role: "user", parts: [{ text: prompt }] }];
+  }
+
+  const history = messages
+    .filter((message) => {
+      return (
+        message &&
+        ["user", "assistant", "model"].includes(message.role) &&
+        getMessageText(message).trim().length > 0
+      );
+    })
+    .slice(-20)
+    .map((message) => ({
+      role: message.role === "assistant" ? "model" : message.role,
+      parts: [{ text: getMessageText(message) }],
+    }));
+
+  const lastMessage = history[history.length - 1];
+
+  const alreadyIncluded =
+    lastMessage?.role === "user" &&
+    lastMessage.parts?.[0]?.text === prompt;
+
+  if (!alreadyIncluded) {
+    history.push({
+      role: "user",
+      parts: [{ text: prompt }],
+    });
+  }
+
+  return history;
 }
 
-// ======================================================
-// CHAT API — GEMINI STREAMING
-// ======================================================
+// --------------------------------------------------
+// CHAT API
+// --------------------------------------------------
 
 app.post("/api/chat", async (req, res) => {
-  const { messages, skill = "normal" } = req.body || {};
+  const prompt = getUserPrompt(req.body);
 
-  if (!Array.isArray(messages)) {
+  if (!prompt) {
     return res.status(400).json({
-      error: "The messages field must be an array.",
+      error: "Please enter a message.",
     });
   }
 
-  const safeMessages = messages
-    .filter(
-      (message) =>
-        message &&
-        ["user", "assistant"].includes(message.role) &&
-        typeof message.content === "string"
-    )
-    .map((message) => ({
-      role: message.role,
-      content: message.content.slice(0, 20000),
-    }))
-    .slice(-30);
-
-  const lastUserMessage = [...safeMessages]
-    .reverse()
-    .find((message) => message.role === "user");
-
-  if (!lastUserMessage) {
-    return res.status(400).json({
-      error: "Please send a user message.",
+  if (prompt.length > 20000) {
+    return res.status(413).json({
+      error: "Your message is too long. Please shorten it.",
     });
   }
 
-  const selectedSkill = SKILLS[skill] || SKILLS.normal;
+  // Answer identity questions without making an API request.
+  if (isIdentityQuestion(prompt)) {
+    const reply =
+      "⚡ My developers are Frank Bhatiwal and Ayush Verma! " +
+      "They built LENDA AI together. 🚀";
 
-  if (isIdentityQuestion(lastUserMessage.content)) {
-    startStream(res);
-
-    sendEvent(res, { token: IDENTITY_ANSWER });
-    sendEvent(res, {
-      done: true,
-      answer: IDENTITY_ANSWER,
-      model: "LENDA IDENTITY",
+    return res.json({
+      reply,
+      text: reply,
+      answer: reply,
     });
-
-    return res.end();
   }
 
-  startStream(res);
+  if (!ai) {
+    return res.status(503).json({
+      error:
+        "Gemini is not configured. Check the GEMINI_API_KEY environment variable in the backend.",
+    });
+  }
 
-  const controller = new AbortController();
+  const skill = getSkill(req.body);
+  const systemInstruction = SKILLS[skill];
+
+  const contents = getConversationHistory(
+    req.body?.messages,
+    prompt
+  );
+
+  // Set up streaming for the frontend.
+  res.status(200);
+  res.setHeader(
+    "Content-Type",
+    "text/event-stream; charset=utf-8"
+  );
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
+
   let clientDisconnected = false;
 
+  // Monitor the response connection rather than the request body.
   res.on("close", () => {
     if (!res.writableEnded) {
       clientDisconnected = true;
-      controller.abort();
     }
   });
 
-  try {
-    // Gemini uses "model" instead of the OpenAI/Ollama
-    // "assistant" role for previous AI responses.
-    const contents = safeMessages.map((message) => ({
-      role: message.role === "assistant" ? "model" : "user",
-      parts: [{ text: message.content }],
-    }));
+  function sendEvent(data) {
+    if (clientDisconnected || res.writableEnded) {
+      return false;
+    }
 
-    const stream = await ai.models.generateContentStream({
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    return true;
+  }
+
+  try {
+    const result = await ai.models.generateContentStream({
       model: MODEL,
       contents,
       config: {
-        systemInstruction: selectedSkill.system,
-        temperature: selectedSkill.temperature,
-        maxOutputTokens: selectedSkill.tokens,
-        abortSignal: controller.signal,
+        systemInstruction,
+        temperature: 0.7,
+        maxOutputTokens: 2048,
       },
     });
 
-    let fullAnswer = "";
+    let fullReply = "";
 
-    for await (const chunk of stream) {
-      if (clientDisconnected) break;
-
-      const token = chunk.text;
-
-      if (typeof token === "string" && token.length > 0) {
-        fullAnswer += token;
-        sendEvent(res, { token });
+    for await (const chunk of result) {
+      if (clientDisconnected) {
+        return;
       }
-    }
 
-    if (clientDisconnected || res.writableEnded) return;
+      const text = chunk.text || "";
 
-    if (!fullAnswer.trim()) {
-      sendEvent(res, {
-        error: "LENDA received an empty response. Please try again.",
+      if (!text) {
+        continue;
+      }
+
+      fullReply += text;
+
+      sendEvent({
+        text,
+        done: false,
       });
     }
 
-    sendEvent(res, {
+    sendEvent({
+      text: "",
+      reply: fullReply,
       done: true,
-      answer: fullAnswer,
-      model: MODEL,
     });
 
-    res.end();
+    if (!res.writableEnded) {
+      res.end();
+    }
   } catch (error) {
-    if (clientDisconnected || res.writableEnded) return;
-
-    console.error("LENDA Gemini error:", error);
-
-    sendEvent(res, {
-      error: "LENDA couldn't generate a response. Please try again.",
-      details: error.message,
+    console.error("LENDA Gemini error:", {
+      message: error?.message,
+      status: error?.status,
     });
 
-    res.end();
+    if (!clientDisconnected && !res.writableEnded) {
+      const message =
+        error?.status === 429
+          ? "Gemini rate limit reached. Please wait and try again."
+          : "LENDA could not complete the request. Check the Gemini model, API key and backend logs.";
+
+      sendEvent({
+        error: message,
+        done: true,
+      });
+
+      res.end();
+    }
   }
 });
 
-// ======================================================
-// START SERVER
-// ======================================================
+// --------------------------------------------------
+// UNKNOWN API ROUTES
+// --------------------------------------------------
 
-// Bind to all network interfaces so cloud hosting can reach it.
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    error: "API route not found.",
+  });
+});
+
+// --------------------------------------------------
+// ERROR HANDLER
+// --------------------------------------------------
+
+app.use((error, req, res, next) => {
+  console.error("LENDA server error:", error.message);
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  res.status(500).json({
+    error: "An unexpected backend error occurred.",
+  });
+});
+
+// --------------------------------------------------
+// START SERVER
+// --------------------------------------------------
+
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("");
-  console.log("⚡ LENDA AI BACKEND");
-  console.log(`🌐 Port: ${PORT}`);
-  console.log(`🧠 Provider: Google Gemini`);
+  console.log("-----------------------------------");
+  console.log("⚡ LENDA AI backend is running");
+  console.log(`📡 Port: ${PORT}`);
   console.log(`🧠 Model: ${MODEL}`);
+  console.log(`🔑 API key configured: ${Boolean(API_KEY)}`);
   console.log(`👨‍💻 Developers: ${DEVELOPERS.join(" & ")}`);
-  console.log("🚀 Streaming enabled");
-  console.log("");
+  console.log("-----------------------------------");
 });
